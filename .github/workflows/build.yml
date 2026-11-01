@@ -291,6 +291,32 @@ jobs:
           PYEOF
           grep -n "lamu_dirty_policy_probe" security/selinux/selinuxfs.c | head -3
 
+      - name: Patch selinux_hide ksu-only fast path
+        if: \${{ inputs.version == 'android15-6.6' && inputs.sublevel == '102' && inputs.os_patch_level == '2025-10' }}
+        shell: bash
+        working-directory: \${{ github.workspace }}/kernel
+        run: |
+          set -euo pipefail
+          python3 - <<'PYEOF'
+          import glob, sys
+          guard = "    {\n        size_t gi;\n        bool has_ksu = false;\n        for (gi = 0; gi + 3 <= size; gi++) {\n            if (((const char *)value)[gi] == 'k' &&\n                ((const char *)value)[gi + 1] == 's' &&\n                ((const char *)value)[gi + 2] == 'u') {\n                has_ksu = true;\n                break;\n            }\n        }\n        if (!has_ksu)\n            goto call_orig;\n    }"
+          anchor = "    char *str = value;"
+          patched = 0
+          for f in glob.glob("**/selinux_hide.c", recursive=True):
+              s = open(f).read()
+              if "has_ksu" in s:
+                  continue
+              if anchor not in s:
+                  print("anchor missing in", f)
+                  continue
+              s = s.replace(anchor, anchor + guard, 1)
+              open(f, "w").write(s)
+              patched += 1
+          print("patched files:", patched)
+          if patched == 0:
+              sys.exit(1)
+          PYEOF
+
       - name: Kernel Fixes
         uses: ./.github/actions/kernel-fixes
         with:
