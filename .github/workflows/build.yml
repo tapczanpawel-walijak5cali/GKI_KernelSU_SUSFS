@@ -281,7 +281,7 @@ jobs:
           anchor = "static ssize_t selinux_transaction_write(struct file *file, const char __user *buf, size_t size, loff_t *pos)"
           assert anchor in s, "anchor transaction_write missing"
           if "#include <linux/cred.h>" not in s:
-              s = s.replace("#include <linux/kernel.h>", "#include <linux/kernel.h>\\n#include <linux/cred.h>", 1)
+              s = s.replace("#include <linux/kernel.h>", "#include <linux/kernel.h>" + chr(10) + "#include <linux/cred.h>", 1)
           s = s.replace(anchor, helper + "\n" + anchor, 1)
           probe = "	data = simple_transaction_get(file, buf, size);\n	if (IS_ERR(data))\n		return PTR_ERR(data);"
           assert probe in s, "probe anchor missing"
