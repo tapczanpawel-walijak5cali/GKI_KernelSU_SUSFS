@@ -403,6 +403,9 @@ jobs:
                   print("anchor missing in", f)
                   continue
               s = s.replace(anchor, anchor + guard, 1)
+              # unwrap call_orig label + stock delegation from the SUSFS ifdef
+              s = s.replace("#ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\ncall_orig:", "call_orig:", 1)
+              s = s.replace("return ksu_orig_setprocattr(p, name, value, size);\n#endif\n#endif\n}", "return ksu_orig_setprocattr(p, name, value, size);\n#endif\n}", 1)
               open(f, "w").write(s)
               patched += 1
           print("patched files:", patched)
