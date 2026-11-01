@@ -384,7 +384,7 @@ jobs:
           sublevel: ${{ steps.extract.outputs.sublevel }}
           root_flavor: ${{ inputs.root_flavor }}
 
-      - name: Patch selinux_hide ksu-only fast path
+      - name: Patch susfs context parse timing
         if: ${{ inputs.version == 'android15-6.6' && inputs.sublevel == '102' && inputs.os_patch_level == '2025-10' }}
         shell: bash
         working-directory: ${{ github.workspace }}/kernel
@@ -392,22 +392,36 @@ jobs:
           set -euo pipefail
           python3 - <<'PYEOF'
           import glob, sys
-          guard = "    {\n        size_t gi;\n        bool has_ksu = false;\n        for (gi = 0; gi + 3 <= size; gi++) {\n            if (((const char *)value)[gi] == 'k' &&\n                ((const char *)value)[gi + 1] == 's' &&\n                ((const char *)value)[gi + 2] == 'u') {\n                has_ksu = true;\n                break;\n            }\n        }\n        if (!has_ksu)\n            goto call_orig;\n    }"
-          anchor = "    char *str = value;"
+          guard = """
+              if (size >= 3) {
+                  size_t gi_ksu;
+                  bool has_ksu_ = false;
+                  for (gi_ksu = 0; gi_ksu + 3 <= size; gi_ksu++) {
+                      if (((const char *)scontext)[gi_ksu] == 'k' &&
+                          ((const char *)scontext)[gi_ksu + 1] == 's' &&
+                          ((const char *)scontext)[gi_ksu + 2] == 'u') {
+                          has_ksu_ = true;
+                          break;
+                      }
+                  }
+                  if (!has_ksu_)
+                      return security_context_to_sid(scontext, scontext_len, sid, gfp);
+              }
+          """
+          anchor = "int susfs_security_context_to_sid(const char *scontext"
           patched = 0
-          for f in glob.glob("**/selinux_hide.c", recursive=True):
+          for f in glob.glob("common/security/selinux/**/*.c", recursive=True):
               s = open(f).read()
-              if "has_ksu" in s:
+              if "has_ksu_" in s:
                   continue
               if anchor not in s:
-                  print("anchor missing in", f)
                   continue
-              s = s.replace(anchor, anchor + guard, 1)
-              # unwrap call_orig label + stock delegation from the SUSFS ifdef
-              s = s.replace("#ifndef KSU_COMPAT_HAS_SUSFS_FEATURE_SELINUX_HIDE\ncall_orig:", "call_orig:", 1)
-              s = s.replace("return ksu_orig_setprocattr(p, name, value, size);\n#endif\n#endif\n}", "return ksu_orig_setprocattr(p, name, value, size);\n#endif\n}", 1)
+              i = s.index(anchor)
+              j = s.index("{", i) + 1
+              s = s[:j] + guard + s[j:]
               open(f, "w").write(s)
               patched += 1
+              print("patched:", f)
           print("patched files:", patched)
           if patched == 0:
               sys.exit(1)
