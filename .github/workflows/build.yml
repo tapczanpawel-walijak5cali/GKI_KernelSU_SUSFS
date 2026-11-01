@@ -384,37 +384,45 @@ jobs:
           sublevel: ${{ steps.extract.outputs.sublevel }}
           root_flavor: ${{ inputs.root_flavor }}
 
-      - name: Patch susfs context parse timing
+      - name: Patch setprocattr dispatcher ksu-only
         if: ${{ inputs.version == 'android15-6.6' && inputs.sublevel == '102' && inputs.os_patch_level == '2025-10' }}
         shell: bash
         working-directory: ${{ github.workspace }}/kernel
         run: |
           set -euo pipefail
           python3 - <<'PYEOF'
-          import glob, sys, os
-          print("cwd:", os.getcwd())
-          guard = "    if (scontext_len >= 3) {\n        size_t gi_ksu;\n        bool has_ksu_ = false;\n        for (gi_ksu = 0; gi_ksu + 3 <= scontext_len; gi_ksu++) {\n            if (scontext[gi_ksu] == 'k' &&\n                scontext[gi_ksu + 1] == 's' &&\n                scontext[gi_ksu + 2] == 'u') {\n                has_ksu_ = true;\n                break;\n            }\n        }\n        if (!has_ksu_)\n            return security_context_to_sid(scontext, scontext_len, sid, gfp);\n    }"
-          anchor = "int susfs_security_context_to_sid(const char *scontext"
-          allc = glob.glob("common/security/selinux/**/*.c", recursive=True)
-          print("glob found:", len(allc))
-          patched = 0
-          for f in allc:
-              s = open(f).read()
-              if "susfs_security_context_to_sid" in s:
-                  print("candidate:", f)
-              if "has_ksu_" in s:
-                  continue
-              if anchor not in s:
-                  continue
-              i = s.index(anchor)
-              k = s.index(")", i)
-              j = s.index("{", k) + 1
-              s = s[:j] + guard + s[j:]
+          import sys
+          old = """
+          	if ((likely(!strcmp(name, "current") &&
+          				current_uid().val >= 10000 &&
+          				ksu_selinux_hide_running)))
+          		return my_setprocattr(name, value, size);
+          	return selinux_setprocattr(name, value, size);
+          """
+          new = """
+          	if (likely(!strcmp(name, "current") &&
+          				current_uid().val >= 10000 &&
+          				ksu_selinux_hide_running)) {
+          		size_t gi;
+          		for (gi = 0; gi + 3 <= size; gi++) {
+          			if (((const char *)value)[gi] == 'k' &&
+          				((const char *)value)[gi + 1] == 's' &&
+          				((const char *)value)[gi + 2] == 'u')
+          				return my_setprocattr(name, value, size);
+          		}
+          	}
+          	return selinux_setprocattr(name, value, size);
+          """
+          f = "common/security/selinux/hooks.c"
+          s = open(f).read()
+          if "gi + 3 <= size" in s:
+              print("already patched")
+          elif old in s:
+              s = s.replace(old, new, 1)
               open(f, "w").write(s)
-              patched += 1
-              print("patched:", f)
-          print("patched files:", patched)
-          if patched == 0:
+              print("dispatcher patched")
+          else:
+              print("ANCHOR MISSING", file=sys.stderr)
               sys.exit(1)
           PYEOF
 
