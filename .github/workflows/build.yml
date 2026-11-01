@@ -391,33 +391,24 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PYEOF'
-          import glob, sys
-          guard = """
-              if (size >= 3) {
-                  size_t gi_ksu;
-                  bool has_ksu_ = false;
-                  for (gi_ksu = 0; gi_ksu + 3 <= size; gi_ksu++) {
-                      if (((const char *)scontext)[gi_ksu] == 'k' &&
-                          ((const char *)scontext)[gi_ksu + 1] == 's' &&
-                          ((const char *)scontext)[gi_ksu + 2] == 'u') {
-                          has_ksu_ = true;
-                          break;
-                      }
-                  }
-                  if (!has_ksu_)
-                      return security_context_to_sid(scontext, scontext_len, sid, gfp);
-              }
-          """
+          import glob, sys, os
+          print("cwd:", os.getcwd())
+          guard = "    if (scontext_len >= 3) {\n        size_t gi_ksu;\n        bool has_ksu_ = false;\n        for (gi_ksu = 0; gi_ksu + 3 <= scontext_len; gi_ksu++) {\n            if (scontext[gi_ksu] == 'k' &&\n                scontext[gi_ksu + 1] == 's' &&\n                scontext[gi_ksu + 2] == 'u') {\n                has_ksu_ = true;\n                break;\n            }\n        }\n        if (!has_ksu_)\n            return security_context_to_sid(scontext, scontext_len, sid, gfp);\n    }"
           anchor = "int susfs_security_context_to_sid(const char *scontext"
+          allc = glob.glob("common/security/selinux/**/*.c", recursive=True)
+          print("glob found:", len(allc))
           patched = 0
-          for f in glob.glob("common/security/selinux/**/*.c", recursive=True):
+          for f in allc:
               s = open(f).read()
+              if "susfs_security_context_to_sid" in s:
+                  print("candidate:", f)
               if "has_ksu_" in s:
                   continue
               if anchor not in s:
                   continue
               i = s.index(anchor)
-              j = s.index("{", i) + 1
+              k = s.index(")", i)
+              j = s.index("{", k) + 1
               s = s[:j] + guard + s[j:]
               open(f, "w").write(s)
               patched += 1
