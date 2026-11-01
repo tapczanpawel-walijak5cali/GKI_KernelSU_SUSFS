@@ -258,7 +258,7 @@ jobs:
           # (12-5.10/13-5.10/13-5.15/14-5.15/14-6.1) fs patches reference
           # `fake_state` and will fail to link with latest BakaSU; 6.6/6.12 are
           # unaffected. Watch those 5 families for build failures.
-          PIN_BAKASU="ac7bfb68a616bea6f87127817c856da13662508f"
+          PIN_BAKASU="a6fdeeca9ff3388a3b44b1140fdbab99a223ed54"
           # SukiSU-Ultra: builtin tip (b5917072, 2026-10-27, "feat(extension):
           # publish capabilities and ABI from the kernel"); defines fake_state
           # itself, calls the susfs_def.h no_su API -> OK on tips.
