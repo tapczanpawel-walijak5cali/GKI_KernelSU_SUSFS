@@ -292,9 +292,9 @@ jobs:
           grep -n "lamu_dirty_policy_probe" security/selinux/selinuxfs.c | head -3
 
       - name: Patch selinux_hide ksu-only fast path
-        if: \${{ inputs.version == 'android15-6.6' && inputs.sublevel == '102' && inputs.os_patch_level == '2025-10' }}
+        if: ${{ inputs.version == 'android15-6.6' && inputs.sublevel == '102' && inputs.os_patch_level == '2025-10' }}
         shell: bash
-        working-directory: \${{ github.workspace }}/kernel
+        working-directory: ${{ github.workspace }}/kernel
         run: |
           set -euo pipefail
           python3 - <<'PYEOF'
