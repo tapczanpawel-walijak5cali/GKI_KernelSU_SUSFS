@@ -262,8 +262,7 @@ jobs:
               int i;
               if (size < 10 || size > 800)
                   return false;
-              if (!strstr((const char *)current_security(), "app_zygote"))
-                  return false;
+
               for (i = 0; dirty[i]; i++) {
                   size_t dl = strlen(dirty[i]);
                   size_t j;
@@ -285,7 +284,7 @@ jobs:
           s = s.replace(anchor, helper + "\n" + anchor, 1)
           probe = "	data = simple_transaction_get(file, buf, size);\n	if (IS_ERR(data))\n		return PTR_ERR(data);"
           assert probe in s, "probe anchor missing"
-          probe_new = probe + "\n\n	if (lamu_dirty_policy_probe(data, size))\n		return -EINVAL;"
+          probe_new = probe + "\n\n	if ((ino == SEL_ACCESS || ino == SEL_CONTEXT) &&\n\t\t    lamu_dirty_policy_probe(data, size))\n		return -EINVAL;"
           s = s.replace(probe, probe_new, 1)
           open(p, "w").write(s)
           print("selinuxfs probe filter applied")
