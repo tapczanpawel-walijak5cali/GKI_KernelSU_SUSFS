@@ -262,7 +262,7 @@ jobs:
               int i;
               if (size < 10 || size > 800)
                   return false;
-              if (current_uid().val < 10000)
+              if (!strstr((const char *)current_security(), "app_zygote"))
                   return false;
               for (i = 0; dirty[i]; i++) {
                   size_t dl = strlen(dirty[i]);
